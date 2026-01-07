@@ -7,7 +7,12 @@ let camStarted = false;
 let cam;
 let cvReady = false;
 
-// =====================
+let modelStatus = "not started";
+let modelError = "";
+let loadedCount = 0;
+let totalCount = 0;
+
+
 // Tracking (A/B stable boxes)
 // =====================
 let trackA = null;
@@ -92,9 +97,14 @@ three.ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 }
 
 function loadAllModels() {
-  const loader = new THREE.GLTFLoader();
+  const manager = new THREE.LoadingManager();
+  manager.onStart = () => { modelStatus = "loading..."; };
+  manager.onLoad  = () => { modelStatus = "all loaded ✅"; };
+  manager.onError = (url) => { modelStatus = "load error ❌"; modelError = `fail: ${url}`; };
 
-
+  const loader = new THREE.GLTFLoader(manager);
+  // 有些 iOS 情况下加这个更稳
+  loader.setCrossOrigin("anonymous");
 
   const files = {
     Tendril:      "models/tendril.glb",
@@ -105,34 +115,36 @@ function loadAllModels() {
   };
 
   const keys = Object.keys(files);
-  let loaded = 0;
+  totalCount = keys.length;
+  loadedCount = 0;
 
-  keys.forEach(key => {
+  keys.forEach((key) => {
     loader.load(
       files[key],
       (gltf) => {
         const obj = gltf.scene;
         obj.visible = false;
-
-        // 默认大小：之后你会用“生长”再改
         obj.scale.set(0.6, 0.6, 0.6);
-
-        // ✅ 标记：避免每帧都 clone 材质
         obj.userData._materialCloned = false;
 
         three.models[key] = obj;
         three.root.add(obj);
 
-        loaded++;
-        console.log(`✅ loaded ${key} (${loaded}/${keys.length})`);
+        loadedCount++;
+        modelStatus = `loaded ${loadedCount}/${totalCount}`;
 
         if (!three.current) setActiveModel(key);
       },
       undefined,
-      (err) => console.error("❌ load error", key, err)
+      (err) => {
+        modelStatus = "load error ❌";
+        modelError = `${key}: ${err?.message || err}`;
+        console.error("❌ load error", key, err);
+      }
     );
   });
 }
+
 
 function setActiveModel(name) {
   const m = three.models[name];
@@ -209,6 +221,11 @@ fill(255);
 textSize(14);
 text(`three ready: ${!!three.renderer}`, 20, 50);
 text(`model loaded: ${Object.keys(three.models).length}`, 20, 70);
+
+fill(255);
+textSize(14);
+text(`modelStatus: ${modelStatus}`, 20, 90);
+if (modelError) text(`modelError: ${modelError}`, 20, 110);
 
   //background(0);
 
@@ -820,5 +837,3 @@ function screenToGround(sx, sy) {
   const ok = ray.intersectPlane(three.ground, hit);
   return ok ? hit : null;
 }
-
-
