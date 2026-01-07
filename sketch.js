@@ -820,3 +820,5 @@ function screenToGround(sx, sy) {
   const ok = ray.intersectPlane(three.ground, hit);
   return ok ? hit : null;
 }
+
+
