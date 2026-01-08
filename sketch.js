@@ -222,10 +222,6 @@ textSize(14);
 text(`three ready: ${!!three.renderer}`, 20, 50);
 text(`model loaded: ${Object.keys(three.models).length}`, 20, 70);
 
-fill(255);
-textSize(14);
-text(`modelStatus: ${modelStatus}`, 20, 90);
-if (modelError) text(`modelError: ${modelError}`, 20, 110);
 
   //background(0);
 
@@ -469,6 +465,17 @@ if (three.ready && objects.length > 0) {
   src.delete();
   gray.delete();
   edges.delete();
+
+  // 在 draw() 的末尾添加
+fill(255, 0, 0);
+textSize(20);
+if (three.current) {
+    let pos = three.current.position;
+    text(`Model: ${three.current.visible ? 'Visible' : 'Hidden'}`, 20, 120);
+    text(`Pos: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`, 20, 140);
+} else {
+    text("No Active Model", 20, 120);
+}
 }
 
 function windowResized() {
@@ -821,19 +828,25 @@ function applyAppearanceToModel(model, app) {
 }
 
 function screenToGround(sx, sy) {
-  // sx, sy 是屏幕像素坐标（p5 的 width/height 坐标系）
-  const ndc = new THREE.Vector3(
-    (sx / width) * 2 - 1,
-    -(sy / height) * 2 + 1,
-    0.5
-  );
+  // 1. 确保 ndc 坐标计算准确
+  const mouse = new THREE.Vector2();
+  mouse.x = (sx / window.innerWidth) * 2 - 1;
+  mouse.y = -(sy / window.innerHeight) * 2 + 1;
 
-  ndc.unproject(three.camera);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, three.camera);
 
-  const dir = ndc.sub(three.camera.position).normalize();
-  const ray = new THREE.Ray(three.camera.position, dir);
-
-  const hit = new THREE.Vector3();
-  const ok = ray.intersectPlane(three.ground, hit);
-  return ok ? hit : null;
+  // 2. 创建一个虚拟的“前方”平面，防止射线射向无穷远
+  // 即使没击中 ground 平面，也让模型出现在相机前方 2 个单位处
+  const targetPoint = new THREE.Vector3();
+  const ok = raycaster.ray.intersectPlane(three.ground, targetPoint);
+  
+  if (ok) {
+    return targetPoint;
+  } else {
+    // 兜底方案：如果没算到地面，把模型放在相机正前方
+    const fallback = new THREE.Vector3();
+    raycaster.ray.at(2, fallback); 
+    return fallback;
+  }
 }
